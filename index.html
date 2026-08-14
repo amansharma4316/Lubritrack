@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Lubrication Tracker</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- SPLASH -->
+<div id="splash">
+  <div class="splash-mark"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/><circle cx="18.5" cy="5.5" r="2.5"/></svg></div>
+  <div class="splash-name">Lubrication Tracker</div>
+  <div class="splash-sub" id="splash-sub">Checking your session…</div>
+  <div class="spinner"></div>
+</div>
+
+<!-- NAVBAR -->
+<nav class="bar" id="navbar" style="display:none">
+  <a class="brand" onclick="showPage('dashboard')">
+    <div class="brand-mark"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/><circle cx="18.5" cy="5.5" r="2.5"/></svg></div>
+    <span class="brand-name">LubriTrack- Rusk</span>
+  </a>
+  <div class="nav-links" id="nav-links"></div>
+  <div class="bar-right">
+    <span class="role-tag" id="role-tag"></span>
+    <button class="signout-btn" onclick="handleSignOut()">Sign out</button>
+    <div class="avatar" id="user-avatar" title="Sign out" onclick="handleSignOut()"></div>
+  </div>
+</nav>
+
+<!-- ══════════════════════════════════════════════════
+     DASHBOARD
+══════════════════════════════════════════════════ -->
+<div id="page-dashboard" class="pg">
+  <div id="dash-error" class="err-bar"></div>
+  <div id="dash-banner" class="info-strip"></div>
+  <div class="stat-row" id="dash-cards"><div style="grid-column:1/-1;text-align:center;padding:28px;color:var(--ink-4)">Loading…</div></div>
+  <div class="panel">
+    <div class="ph">
+      <span class="ph-title">Equipment</span>
+      <select id="dash-line" onchange="dashLineChanged()" style="font-size:12.5px;padding:5px 9px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);font-family:var(--font)"><option value="">All Lines</option></select>
+      <select id="dash-area" onchange="applyDash()" style="font-size:12.5px;padding:5px 9px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);font-family:var(--font)"><option value="">All Areas</option></select>
+      <input type="text" id="dash-search" placeholder="Search…" oninput="debouncedDash()" style="padding:5px 9px;border:1px solid var(--border);border-radius:var(--r);font-size:12.5px;font-family:var(--font);width:160px">
+      <button class="btn btn-ghost btn-sm" onclick="clearDash()">Clear</button>
+      <button class="btn btn-info btn-sm" onclick="exportCSV('dash-tbl','Equipment.csv')" style="margin-left:auto">↓ Export</button>
+    </div>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Line</th><th>Area</th><th>Equipment</th><th>Code</th><th>Actions</th></tr></thead>
+        <tbody id="dash-tbl"><tr><td colspan="5" class="loading-r">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     GLOBAL PARTS
+══════════════════════════════════════════════════ -->
+<div id="page-global-parts" class="pg">
+  <button class="back" onclick="showPage('dashboard')">← Dashboard</button>
+  <div id="gp-error" class="err-bar"></div>
+  <h2 id="gp-title" style="font-size:17px;font-weight:700;margin-bottom:14px"></h2>
+  <div class="panel">
+    <div class="ph">
+      <span class="ph-title" id="gp-sub"></span>
+      <button class="btn btn-info btn-sm" onclick="exportCSV('gp-tbl','Parts.csv')" style="margin-left:auto">↓ Export</button>
+    </div>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Line</th><th>Area</th><th>Equipment</th><th>Code</th><th>Part</th><th>Lubricant</th><th>Frequency</th><th>Next Due</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody id="gp-tbl"><tr><td colspan="10" class="loading-r">Loading…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="pagination" id="gp-pager" style="display:none">
+      <button class="btn btn-ghost btn-sm" id="gp-prev" onclick="gpPage(-1)">← Prev</button>
+      <button class="btn btn-ghost btn-sm" id="gp-next" onclick="gpPage(1)">Next →</button>
+      <span class="pg-info" id="gp-info"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     TECHNICIAN TASKS
+══════════════════════════════════════════════════ -->
+<div id="page-technician" class="pg">
+  <div id="tech-error" class="err-bar"></div>
+  <h2 id="tech-title" style="font-size:17px;font-weight:700;margin-bottom:18px"></h2>
+  <div id="tech-list"><p style="text-align:center;color:var(--ink-4);padding:28px">Loading…</p></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     EQUIPMENT PARTS
+══════════════════════════════════════════════════ -->
+<div id="page-equipment" class="pg">
+  <button class="back" onclick="showPage('dashboard')">← Dashboard</button>
+  <div id="eq-error" class="err-bar"></div>
+  <div class="eq-head" id="eq-head"><p>Loading…</p></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:9px;margin-bottom:14px">
+    <div class="fpills" style="margin-bottom:0">
+      <button class="fp on" onclick="setPartFilter('all',this)">All <span id="cnt-all"></span></button>
+      <button class="fp" onclick="setPartFilter('today',this)">Due Today <span id="cnt-today"></span></button>
+      <button class="fp" onclick="setPartFilter('week',this)">This Week <span id="cnt-week"></span></button>
+      <button class="fp" onclick="setPartFilter('missed',this)">Missed <span id="cnt-missed"></span></button>
+    </div>
+    <button class="btn btn-info btn-sm" onclick="exportCSV('parts-tbl','Parts.csv')">↓ Export</button>
+  </div>
+  <div class="panel">
+    <div class="tw">
+      <table>
+        <thead><tr><th>Code</th><th>Part</th><th>Lubricant</th><th>Frequency</th><th>Last Done</th><th>Next Due</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody id="parts-tbl"><tr><td colspan="8" class="loading-r">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     EQUIPMENT HISTORY
+══════════════════════════════════════════════════ -->
+<div id="page-history" class="pg">
+  <button class="back" onclick="showPage('dashboard')">← Dashboard</button>
+  <div id="hist-error" class="err-bar"></div>
+  <div class="eq-head" id="hist-head"><p>Loading…</p></div>
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:9px;margin-bottom:12px">
+    <p style="font-size:11.5px;color:var(--ink-3);padding:7px 11px;background:var(--amber-l);border-radius:5px;border-left:3px solid var(--amber);flex:1">
+      Showing last 50 records. Use <strong>Load More</strong> for older entries or <strong>Export All</strong> for the full set.
+    </p>
+    <button class="btn btn-info btn-sm" id="hist-export-btn" onclick="exportHistFull()">↓ Export All</button>
+  </div>
+  <div class="panel">
+    <div class="ph"><span class="ph-title">Lubrication History</span><span id="hist-count" style="font-size:11.5px;color:var(--ink-4);margin-left:auto"></span></div>
+    <div class="tw">
+      <table>
+        <thead><tr><th>#</th><th>Line</th><th>Area</th><th>Equipment</th><th>Part</th><th>Lubricated On</th><th>By</th><th>Frequency</th><th>Next Due</th></tr></thead>
+        <tbody id="hist-tbl"><tr><td colspan="9" class="loading-r">Loading…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="load-more-row" id="hist-lm" style="display:none">
+      <button class="btn btn-ghost" id="hist-lm-btn" onclick="loadMoreHist()">Load More</button>
+      <span id="hist-lm-info" style="font-size:11.5px;color:var(--ink-4);margin-left:10px"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     LINE HISTORY
+══════════════════════════════════════════════════ -->
+<div id="page-line-history" class="pg">
+  <div id="lh-error" class="err-bar"></div>
+  <div class="panel" style="margin-bottom:18px">
+    <div class="ph"><span class="ph-title">Line-wise Lubrication History</span></div>
+    <div style="padding:14px 18px;display:flex;gap:11px;align-items:flex-end;flex-wrap:wrap;background:var(--bg);border-bottom:1px solid var(--border)">
+      <div class="fg" style="flex:1;min-width:180px;max-width:280px;margin:0">
+        <label>Production Line</label>
+        <select id="lh-sel" onchange="lhLineChanged()" style="padding:8px 11px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--surface);font-family:var(--font)">
+          <option value="">— Select a Line —</option>
+        </select>
+      </div>
+      <button class="btn btn-info btn-sm" id="lh-export" onclick="exportLHFull()" disabled>↓ Export All</button>
+    </div>
+    <div id="lh-summary" style="display:none;padding:10px 18px;background:var(--blue-l);border-bottom:1px solid var(--border);font-size:12.5px;color:var(--blue)"></div>
+  </div>
+  <div class="panel" id="lh-panel" style="display:none">
+    <div class="ph">
+      <span class="ph-title" id="lh-panel-title">History</span>
+      <span id="lh-count" style="font-size:11.5px;color:var(--ink-4);margin-left:auto"></span>
+    </div>
+    <div class="tw">
+      <table>
+        <thead><tr><th>#</th><th>Line</th><th>Area</th><th>Equipment</th><th>Part</th><th>Lubricated On</th><th>By</th><th>Frequency</th><th>Next Due</th></tr></thead>
+        <tbody id="lh-tbl"><tr><td colspan="9" class="loading-r">Select a line to load history.</td></tr></tbody>
+      </table>
+    </div>
+    <div class="load-more-row" id="lh-lm" style="display:none">
+      <button class="btn btn-ghost" id="lh-lm-btn" onclick="loadMoreLH()">Load More</button>
+      <span id="lh-lm-info" style="font-size:11.5px;color:var(--ink-4);margin-left:10px"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     ADMIN
+══════════════════════════════════════════════════ -->
+<div id="page-admin" class="pg">
+  <div id="admin-error" class="err-bar"></div>
+  <div class="admin-tabs">
+    <button class="atab on" onclick="showAdminTab('lines',this)">Lines</button>
+    <button class="atab" onclick="showAdminTab('areas',this)">Areas</button>
+    <button class="atab" onclick="showAdminTab('equipment',this)">Equipment</button>
+    <button class="atab" onclick="showAdminTab('parts',this)">Parts</button>
+    <button class="atab" onclick="showAdminTab('users',this)">Users</button>
+    <button class="atab" onclick="showAdminTab('schedule',this)" style="color:var(--amber)">⚡ Schedule</button>
+  </div>
+
+  <!-- LINES -->
+  <div id="atab-lines" class="atab-c on">
+    <div class="fsec">
+      <h3 id="line-form-title"><span class="step-dot">1</span> Add Production Line</h3>
+      <div id="line-msg"></div>
+      <input type="hidden" id="line-id">
+      <div class="frow"><div class="fg"><label>Line Name</label><input id="line-name" placeholder="e.g. Line 1"></div></div>
+      <div style="display:flex;gap:7px"><button class="btn btn-primary" onclick="saveLine()">Save</button><button class="btn btn-ghost" onclick="resetLineForm()">Clear</button></div>
+    </div>
+    <div class="panel"><div class="tw"><table><thead><tr><th>ID</th><th>Line Name</th><th>Actions</th></tr></thead><tbody id="lines-tbl"><tr><td colspan="3" class="loading-r">Loading…</td></tr></tbody></table></div></div>
+  </div>
+
+  <!-- AREAS -->
+  <div id="atab-areas" class="atab-c">
+    <div class="fsec">
+      <h3 id="area-form-title"><span class="step-dot">2</span> Add Area</h3>
+      <div id="area-msg"></div>
+      <input type="hidden" id="area-id">
+      <div class="hier">Select: <span>Line</span> → then name the Area</div>
+      <div class="frow">
+        <div class="fg"><label>Production Line</label><select id="area-line"><option value="">— Select Line —</option></select></div>
+        <div class="fg"><label>Area Name</label><input id="area-name" placeholder="e.g. Mixing Section"></div>
+      </div>
+      <div style="display:flex;gap:7px"><button class="btn btn-primary" onclick="saveArea()">Save</button><button class="btn btn-ghost" onclick="resetAreaForm()">Clear</button></div>
+    </div>
+    <div class="panel"><div class="tw"><table><thead><tr><th>ID</th><th>Area</th><th>Line</th><th>Actions</th></tr></thead><tbody id="areas-tbl"><tr><td colspan="4" class="loading-r">Loading…</td></tr></tbody></table></div></div>
+  </div>
+
+  <!-- EQUIPMENT -->
+  <div id="atab-equipment" class="atab-c">
+    <div class="fsec">
+      <h3 id="eq-form-title"><span class="step-dot">3</span> Add Equipment</h3>
+      <div id="eq-msg"></div>
+      <input type="hidden" id="eq-id">
+      <div class="hier">Select: <span>Line</span> → <span>Area</span> → fill Equipment details</div>
+      <div class="frow">
+        <div class="fg"><label>① Line</label><select id="eq-line" onchange="eqLineChanged()"><option value="">— Select Line —</option></select></div>
+        <div class="fg"><label>② Area</label><select id="eq-area" disabled><option value="">— Select Line first —</option></select></div>
+        <div class="fg"><label>③ Name</label><input id="eq-name" placeholder="e.g. Pump Motor A"></div>
+        <div class="fg"><label>④ Code</label><input id="eq-code" placeholder="e.g. PM-101"></div>
+      </div>
+      <div class="fg" style="max-width:340px;margin-bottom:12px"><label>Copy parts from (optional)</label><select id="eq-copy"><option value="">— Don't copy —</option></select></div>
+      <div style="display:flex;gap:7px"><button class="btn btn-primary" onclick="saveEquipment()">Save</button><button class="btn btn-ghost" onclick="resetEqForm()">Clear</button></div>
+    </div>
+    <div class="panel"><div class="tw"><table><thead><tr><th>Code</th><th>Name</th><th>Area</th><th>Line</th><th>Actions</th></tr></thead><tbody id="eq-tbl"><tr><td colspan="5" class="loading-r">Loading…</td></tr></tbody></table></div></div>
+  </div>
+
+  <!-- PARTS -->
+  <div id="atab-parts" class="atab-c">
+    <div class="fsec">
+      <h3 id="part-form-title"><span class="step-dot">4</span> Add Part</h3>
+      <div id="part-msg"></div>
+      <input type="hidden" id="part-id">
+      <div class="hier">Select: <span>Line</span> → <span>Area</span> → <span>Equipment</span> → fill Part details</div>
+      <div class="frow">
+        <div class="fg"><label>① Line</label><select id="p-line" onchange="partLineChanged()"><option value="">— Select Line —</option></select></div>
+        <div class="fg"><label>② Area</label><select id="p-area" disabled onchange="partAreaChanged()"><option value="">— Select Line first —</option></select></div>
+        <div class="fg"><label>③ Equipment</label><select id="p-equipment" disabled><option value="">— Select Area first —</option></select></div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label>④ Part Name</label><input id="p-name" placeholder="e.g. Drive Bearing"></div>
+        <div class="fg"><label>Part Code</label><input id="p-code" placeholder="auto if blank"></div>
+        <div class="fg"><label>Lubricant Type</label><input id="p-lubricant" placeholder="e.g. Grease EP2"></div>
+        <div class="fg"><label>Frequency</label>
+          <select id="p-frequency"><option>Daily</option><option>Weekly</option><option selected>Monthly</option><option>Quarterly</option></select>
+        </div>
+        <div class="fg"><label>Next Due Date</label><input id="p-nextdue" type="date"></div>
+      </div>
+      <div style="display:flex;gap:7px"><button class="btn btn-primary" onclick="savePart()">Save</button><button class="btn btn-ghost" onclick="resetPartForm()">Clear</button></div>
+    </div>
+    <div class="panel"><div class="tw"><table>
+      <thead><tr><th>Code</th><th>Part</th><th>Equipment</th><th>Area</th><th>Line</th><th>Lubricant</th><th>Frequency</th><th>Next Due</th><th>Actions</th></tr></thead>
+      <tbody id="parts-tbl-admin"><tr><td colspan="9" class="loading-r">Loading…</td></tr></tbody>
+    </table></div></div>
+  </div>
+
+  <!-- SCHEDULE -->
+  <div id="atab-schedule" class="atab-c">
+    <div class="sched-info">
+      <div style="font-size:24px;flex-shrink:0;margin-top:1px">⚡</div>
+      <div>
+        <div style="font-weight:700;font-size:13.5px;color:var(--amber);margin-bottom:5px">Bulk Anchor Scheduling</div>
+        <div style="font-size:12.5px;color:var(--ink-2);line-height:1.7">
+          Set one <strong>anchor date</strong> for an entire <strong>Line</strong> or a specific <strong>Area</strong>.
+          All parts under that scope get their <em>Next Due</em> set to that date — then their frequency rolls them forward automatically.<br>
+          <strong>Example:</strong> Line-1 is always serviced on Tuesdays → enter next Tuesday. Done. Re-run anytime to reschedule.
+        </div>
+      </div>
+    </div>
+
+    <!-- Sub-tabs -->
+    <div class="sched-sub-tabs">
+      <button class="sst on-amber" id="sst-line" onclick="schedTab('line')">📋 By Line</button>
+      <button class="sst" id="sst-area" onclick="schedTab('area')">📍 By Area</button>
+    </div>
+
+    <!-- BY LINE -->
+    <div id="ss-line">
+      <div class="fsec" style="border-color:rgba(176,114,0,.3)">
+        <h3 style="color:var(--amber)"><span class="step-dot" style="background:var(--amber)">L</span> Schedule Entire Line</h3>
+        <div id="sched-line-msg"></div>
+        <div class="frow">
+          <div class="fg"><label>Line <span style="color:var(--red)">*</span></label><select id="sl-line"><option value="">— Select Line —</option></select></div>
+          <div class="fg">
+            <label>Anchor Date <span style="color:var(--red)">*</span></label>
+            <input id="sl-date" type="date">
+            <span style="font-size:10.5px;color:var(--ink-4);margin-top:2px">First maintenance day for all parts</span>
+          </div>
+          <div class="fg"><label>Apply To</label>
+            <select id="sl-scope"><option value="all">All parts (overwrite existing dates)</option><option value="empty">Only parts with no date set</option></select>
+          </div>
+        </div>
+        <div style="display:flex;gap:7px;flex-wrap:wrap">
+          <button class="btn btn-lg" id="sl-prev-btn" onclick="schedPreview('line')" style="background:var(--amber);color:#fff;border-color:var(--amber)">👁 Preview</button>
+          <button class="btn btn-ghost" onclick="schedReset('line')">Clear</button>
+        </div>
+      </div>
+      <div id="sl-preview" style="display:none">
+        <div class="preview-panel amber">
+          <div class="preview-head amber">
+            <div><div class="preview-title amber">Preview — Line Schedule</div><div class="preview-meta" id="sl-meta"></div></div>
+            <div style="display:flex;gap:7px">
+              <button class="btn btn-ghost btn-sm" onclick="schedReset('line')">✕ Cancel</button>
+              <button class="btn btn-sm" id="sl-confirm" onclick="schedConfirm('line')" style="background:var(--amber);color:#fff;border-color:var(--amber)">✓ Apply</button>
+            </div>
+          </div>
+          <div class="summary-bar" id="sl-sumbar"></div>
+          <div class="tw"><table>
+            <thead><tr><th>#</th><th>Area</th><th>Equipment</th><th>Code</th><th>Part</th><th>Frequency</th><th>Was</th><th>New Due</th></tr></thead>
+            <tbody id="sl-prev-tbl"></tbody>
+          </table></div>
+          <div style="padding:11px 16px;border-top:1px solid var(--border);text-align:right;display:flex;gap:7px;justify-content:flex-end">
+            <button class="btn btn-ghost btn-sm" onclick="schedReset('line')">✕ Cancel</button>
+            <button class="btn btn-sm" id="sl-confirm2" onclick="schedConfirm('line')" style="background:var(--amber);color:#fff;border-color:var(--amber)">✓ Apply Schedule</button>
+          </div>
+        </div>
+      </div>
+      <div id="sl-success" style="display:none">
+        <div class="success-box">
+          <div style="font-size:44px;margin-bottom:11px">✅</div>
+          <div id="sl-succ-msg" style="font-size:15px;font-weight:700;color:var(--green);margin-bottom:7px"></div>
+          <div id="sl-succ-sub" style="font-size:12.5px;color:var(--ink-3);margin-bottom:18px;line-height:1.7"></div>
+          <button class="btn btn-ghost" onclick="schedReset('line')">Schedule Another</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- BY AREA -->
+    <div id="ss-area" style="display:none">
+      <div class="fsec" style="border-color:rgba(23,85,168,.3)">
+        <h3 style="color:var(--blue)"><span class="step-dot" style="background:var(--blue)">A</span> Schedule Specific Area</h3>
+        <div id="sched-area-msg"></div>
+        <div class="frow">
+          <div class="fg"><label>① Line <span style="color:var(--red)">*</span></label><select id="sa-line" onchange="schedAreaLineChanged()"><option value="">— Select Line —</option></select></div>
+          <div class="fg"><label>② Area <span style="color:var(--red)">*</span></label><select id="sa-area" disabled><option value="">— Select Line first —</option></select></div>
+          <div class="fg">
+            <label>③ Anchor Date <span style="color:var(--red)">*</span></label>
+            <input id="sa-date" type="date">
+            <span style="font-size:10.5px;color:var(--ink-4);margin-top:2px">First maintenance day for all parts in area</span>
+          </div>
+          <div class="fg"><label>Apply To</label>
+            <select id="sa-scope"><option value="all">All parts (overwrite existing dates)</option><option value="empty">Only parts with no date set</option></select>
+          </div>
+        </div>
+        <div style="display:flex;gap:7px;flex-wrap:wrap">
+          <button class="btn btn-lg" id="sa-prev-btn" onclick="schedPreview('area')" style="background:var(--blue);color:#fff;border-color:var(--blue)">👁 Preview</button>
+          <button class="btn btn-ghost" onclick="schedReset('area')">Clear</button>
+        </div>
+      </div>
+      <div id="sa-preview" style="display:none">
+        <div class="preview-panel blue">
+          <div class="preview-head blue">
+            <div><div class="preview-title blue">Preview — Area Schedule</div><div class="preview-meta" id="sa-meta"></div></div>
+            <div style="display:flex;gap:7px">
+              <button class="btn btn-ghost btn-sm" onclick="schedReset('area')">✕ Cancel</button>
+              <button class="btn btn-sm" id="sa-confirm" onclick="schedConfirm('area')" style="background:var(--blue);color:#fff;border-color:var(--blue)">✓ Apply</button>
+            </div>
+          </div>
+          <div class="summary-bar" id="sa-sumbar"></div>
+          <div class="tw"><table>
+            <thead><tr><th>#</th><th>Equipment</th><th>Code</th><th>Part</th><th>Frequency</th><th>Was</th><th>New Due</th></tr></thead>
+            <tbody id="sa-prev-tbl"></tbody>
+          </table></div>
+          <div style="padding:11px 16px;border-top:1px solid var(--border);text-align:right;display:flex;gap:7px;justify-content:flex-end">
+            <button class="btn btn-ghost btn-sm" onclick="schedReset('area')">✕ Cancel</button>
+            <button class="btn btn-sm" id="sa-confirm2" onclick="schedConfirm('area')" style="background:var(--blue);color:#fff;border-color:var(--blue)">✓ Apply Schedule</button>
+          </div>
+        </div>
+      </div>
+      <div id="sa-success" style="display:none">
+        <div class="success-box">
+          <div style="font-size:44px;margin-bottom:11px">✅</div>
+          <div id="sa-succ-msg" style="font-size:15px;font-weight:700;color:var(--green);margin-bottom:7px"></div>
+          <div id="sa-succ-sub" style="font-size:12.5px;color:var(--ink-3);margin-bottom:18px;line-height:1.7"></div>
+          <button class="btn btn-ghost" onclick="schedReset('area')">Schedule Another</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- USERS -->
+  <div id="atab-users" class="atab-c">
+    <div class="fsec">
+      <h3 id="user-form-title">Add New User</h3>
+      <div id="user-msg"></div>
+      <input type="hidden" id="user-id">
+      <div style="background:var(--blue-l);border-radius:var(--r);padding:10px 13px;margin-bottom:12px;font-size:12.5px;color:var(--blue)">
+        <strong>Two steps to add a user:</strong> (1) create their login in Supabase → Authentication → Users → Add user (email + password), then (2) add the same email here with a role. This row controls their <em>role and area access</em>; the Auth user controls their <em>password</em>.
+      </div>
+      <div class="frow">
+        <div class="fg"><label>Display Name</label><input id="u-username" placeholder="Jane Smith"></div>
+        <div class="fg"><label>Email (must match their login email)</label><input id="u-email" type="email" placeholder="jane@company.com"></div>
+        <div class="fg"><label>Role</label>
+          <select id="u-role">
+            <option value="technician">Technician — tasks only</option>
+            <option value="manager">Manager — dashboard + history</option>
+            <option value="admin">Admin — full access</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>Area Restriction <span style="color:var(--ink-4);font-weight:400;text-transform:none;font-size:10px">(blank = all areas)</span></label>
+          <div class="area-list" id="u-area-list"><span style="font-size:12px;color:var(--ink-4);font-style:italic">Load Areas tab first</span></div>
+          <span style="font-size:10.5px;color:var(--ink-4);margin-top:2px">Tick none = unrestricted. Tick area(s) = restricted.</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:7px"><button class="btn btn-primary" onclick="saveUser()">Save</button><button class="btn btn-ghost" onclick="resetUserForm()">Clear</button></div>
+    </div>
+    <div class="panel"><div class="tw"><table>
+      <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Area Restriction</th><th>Actions</th></tr></thead>
+      <tbody id="users-tbl"><tr><td colspan="5" class="loading-r">Loading…</td></tr></tbody>
+    </table></div></div>
+  </div>
+
+</div><!-- /admin page -->
+
+<div class="toast" id="toast"></div>
+
+<!-- Supabase client SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<!-- Shared client (URL/anon key) — also used by login.html -->
+<script src="supabase-client.js"></script>
+<!-- API layer: exposes the same function names Code.gs used to, backed by Supabase -->
+<script src="supabase-api.js"></script>
+<!-- App logic (was the inline <script> in the old Apps Script index.html) -->
+<script src="app.js"></script>
+</body>
+</html>
