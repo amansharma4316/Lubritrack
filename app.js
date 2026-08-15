@@ -11,11 +11,12 @@
 // STATE
 // ============================================================
 var S = {
-  page:'dashboard', equipId:null, partFilter:'all', globalFilter:'today',
+  page:'dashboard', appMode:'lube', equipId:null, partFilter:'all', globalFilter:'today',
   allEquip:[], allLines:[], allAreas:[],
   adminLines:[], adminAreas:[], adminEquip:[],
   gpPage:0, gpPageSize:50, gpTotal:0,
   schAll:null,
+  tbmAll:null, tbmAdminEquip:[], tbmAdminTasks:[], tbmAdminLoaded:{},
   adminTabLoaded:{}, adminData:null,
   histOffset:0, histTotal:0, histHasMore:false
 };
@@ -110,6 +111,13 @@ function renderDenied(msg) {
 // ============================================================
 function buildNav() {
   var h = '';
+  if (S.appMode === 'tbm') {
+    h += '<button class="nl" id="nl-tbm" onclick="showPage(\'tbm\')">TBM Schedule</button>';
+    if (currentUser.role === 'admin')
+      h += '<button class="nl" id="nl-tbm-admin" onclick="showPage(\'tbm-admin\')">TBM Admin</button>';
+    document.getElementById('nav-links').innerHTML = h;
+    return;
+  }
   if (currentUser.role !== 'technician')
     h += '<button class="nl" id="nl-dashboard" onclick="showPage(\'dashboard\')">Dashboard</button>';
   h += '<button class="nl" id="nl-technician" onclick="showPage(\'technician\')">Tasks</button>';
@@ -122,6 +130,16 @@ function buildNav() {
   document.getElementById('nav-links').innerHTML = h;
 }
 
+function toggleAppMode() {
+  S.appMode = (S.appMode === 'tbm') ? 'lube' : 'tbm';
+  document.body.classList.toggle('tbm-theme', S.appMode === 'tbm');
+  document.getElementById('mode-switch-btn').textContent = (S.appMode === 'tbm') ? '← Lubrication' : 'TBM →';
+  document.getElementById('brand-name').textContent = (S.appMode === 'tbm') ? 'TBM Tracker- Rusk' : 'LubriTrack- Rusk';
+  document.title = (S.appMode === 'tbm') ? 'TBM Tracker' : 'Lubrication Tracker';
+  buildNav();
+  showPage(S.appMode === 'tbm' ? 'tbm' : (currentUser.role === 'technician' ? 'technician' : 'dashboard'));
+}
+
 function setActiveNav(page) {
   document.querySelectorAll('.nl').forEach(function(l){ l.classList.remove('on'); });
   var key = ({'global-parts':'dashboard','equipment':'dashboard','history':'dashboard'})[page] || page;
@@ -132,6 +150,7 @@ function setActiveNav(page) {
 function showPage(page, params) {
   params = params || {};
   if (page === 'admin' && currentUser.role !== 'admin') return;
+  if (page === 'tbm-admin' && currentUser.role !== 'admin') return;
   if (['dashboard','global-parts','equipment','history','schedule'].indexOf(page) !== -1 && currentUser.role === 'technician') { showPage('technician'); return; }
   document.querySelectorAll('.pg').forEach(function(p){ p.classList.remove('on'); });
   var el = document.getElementById('page-' + page);
@@ -146,7 +165,9 @@ function showPage(page, params) {
   else if (page === 'history')      { if (params.id != null) S.equipId = params.id; S.histOffset = 0; S.histTotal = 0; S.histHasMore = false; loadHist(false); }
   else if (page === 'schedule')     loadSchedule();
   else if (page === 'line-history') loadLHPage();
-  else if (page === 'admin')        { S.adminData = null; S.adminTabLoaded = {}; showAdminTab('lines', document.querySelector('.atab')); }
+  else if (page === 'admin')        { S.adminData = null; S.adminTabLoaded = {}; showAdminTab('lines', document.querySelector('#page-admin .atab')); }
+  else if (page === 'tbm')          { S.tbmAll = null; loadTBM(); }
+  else if (page === 'tbm-admin')    { S.tbmAdminLoaded = {}; showTBMAdminTab('equipment', document.querySelector('#page-tbm-admin .atab')); }
 }
 
 function showAdminTab(name, el) {
@@ -492,6 +513,229 @@ function clearSch() {
   popSel('sch-equip', S.allEquip, 'id', function(e){return e.name;}, 'All Equipment');
   applySch();
 }
+
+// ============================================================
+// TBM — TIME BASED MAINTENANCE
+// Same Supabase project/session as the rest of the app, separate
+// tables (tbm_equipment, tbm_tasks). Green-themed via the
+// .tbm-theme body class (see styles.css) — no layout changes.
+// ============================================================
+async function loadTBM() {
+  document.getElementById('tbm-error').style.display='none';
+  document.getElementById('tbm-cards').innerHTML='<div style="grid-column:1/-1;text-align:center;padding:28px;color:var(--ink-4)">Loading…</div>';
+  document.getElementById('tbm-tbl').innerHTML='<tr><td colspan="9" class="loading-r">Loading…</td></tr>';
+  try {
+    var dd = await getTBMDashboardData();
+    if (!dd || !dd.success) { showErr('tbm-error', dd?dd.error:'No data'); return; }
+    document.getElementById('tbm-cards').innerHTML =
+      '<div class="sc sc-blue" onclick="setTBMStatus(\'today\')"><div class="sc-icon">📅</div><div class="sc-num">'+(dd.stats.due_today||0)+'</div><div class="sc-lbl">Due Today</div></div>' +
+      '<div class="sc sc-amber" onclick="setTBMStatus(\'week\')"><div class="sc-icon">🗓</div><div class="sc-num">'+(dd.stats.upcoming||0)+'</div><div class="sc-lbl">Upcoming (7d)</div></div>' +
+      '<div class="sc sc-red" onclick="setTBMStatus(\'missed\')"><div class="sc-icon">⚠️</div><div class="sc-num">'+(dd.stats.missed||0)+'</div><div class="sc-lbl">Missed</div></div>';
+
+    var sr = await getTBMSchedule();
+    if (!sr || !sr.success) { showErr('tbm-error', sr?sr.error:'Failed to load schedule'); return; }
+    S.tbmAll = (sr.tasks||[]).map(function(t){
+      return {
+        id:t.id, equip_id:t.equip_id, equip_name:t.equip_name, equip_code:t.equip_code,
+        code:t.code, name:t.task_name, frequency:t.frequency,
+        last_done:t.last_done, next_due:t.next_due, remarks:t.remarks,
+        done:t.done, lubricated:t.done
+      };
+    });
+    popSel('tbm-equip', dd.equipment||[], 'id', function(e){return e.name;}, 'All Equipment');
+    var freqs = Array.from(new Set(S.tbmAll.map(function(t){return t.frequency;}).filter(Boolean))).sort();
+    popSel('tbm-freq', freqs.map(function(f){return {id:f,name:f};}), 'id', function(f){return f.name;}, 'All Frequencies');
+    applyTBM();
+  } catch (e) { showErr('tbm-error', e.message); }
+}
+
+var debouncedTBM = debounce(applyTBM, 250);
+
+function setTBMStatus(s) { document.getElementById('tbm-status').value = s; applyTBM(); }
+
+function applyTBM() {
+  if (!S.tbmAll) return;
+  var equip=document.getElementById('tbm-equip').value;
+  var freq=document.getElementById('tbm-freq').value;
+  var status=document.getElementById('tbm-status').value;
+  var q=document.getElementById('tbm-search').value.toLowerCase();
+  var td=todayLocal();
+  var rows = S.tbmAll.filter(function(t){
+    if (equip && String(t.equip_id)!==String(equip)) return false;
+    if (freq && t.frequency!==freq) return false;
+    if (status) {
+      var nd=parseLocalDate(t.next_due);
+      var isDone=String(t.done).toLowerCase()==='yes';
+      if (!nd) return false;
+      if (status==='today'  && !(nd.getTime()===td.getTime() && !isDone)) return false;
+      if (status==='week')  { var in7=new Date(td); in7.setDate(in7.getDate()+7); if (!(nd>td && nd<=in7)) return false; }
+      if (status==='missed' && !(nd<td && !isDone)) return false;
+    }
+    if (q) {
+      var hay=((t.name||'')+' '+(t.code||'')+' '+(t.equip_name||'')+' '+(t.remarks||'')).toLowerCase();
+      if (hay.indexOf(q)===-1) return false;
+    }
+    return true;
+  });
+  renderTBMTbl(rows);
+}
+
+function renderTBMTbl(rows) {
+  var tbody=document.getElementById('tbm-tbl');
+  document.getElementById('tbm-info').textContent=rows.length+' task'+(rows.length===1?'':'s')+' in schedule';
+  if (!rows.length) { tbody.innerHTML='<tr><td colspan="9"><div class="empty"><h3>No matching tasks</h3><p>Try clearing filters.</p></div></td></tr>'; return; }
+  tbody.innerHTML = rows.map(function(t){
+    var isDone=String(t.done).toLowerCase()==='yes';
+    var act = isDone
+      ? '<span style="color:var(--green);font-weight:600;font-size:12px">✓ Done</span>'
+      : '<button class="btn btn-success btn-sm" id="tbmb-'+t.id+'" onclick="tbmMark(\''+t.id+'\')">Mark Done</button>';
+    var remarksTxt = t.remarks ? String(t.remarks).replace(/</g,'&lt;') : '-';
+    return '<tr'+(isDone?' class="done"':'')+'>'+
+      '<td>'+(t.equip_name||'-')+'</td><td><code>'+(t.code||'-')+'</code></td><td><strong>'+(t.name||'')+'</strong></td>'+
+      '<td>'+(t.frequency||'-')+'</td><td>'+(t.last_done||'-')+'</td><td>'+(t.next_due||'-')+'</td>'+
+      '<td style="max-width:220px;white-space:normal;color:var(--ink-3);font-size:12px" title="'+remarksTxt+'">'+remarksTxt+'</td>'+
+      '<td>'+statusBadge(t)+'</td><td>'+act+'</td></tr>';
+  }).join('');
+}
+
+function clearTBM() {
+  document.getElementById('tbm-equip').value='';
+  document.getElementById('tbm-freq').value='';
+  document.getElementById('tbm-status').value='';
+  document.getElementById('tbm-search').value='';
+  applyTBM();
+}
+
+function tbmMark(id) {
+  var remarks = window.prompt('Remarks (optional):', '');
+  if (remarks === null) return; // cancelled
+  var btn = document.getElementById('tbmb-'+id);
+  if (btn) { btn.disabled=true; btn.textContent='✓ Done'; }
+  markTBMDone(id, remarks).then(function(r){
+    if (r && r.success) { toast('Logged ✓'); setTimeout(function(){ if (S.page==='tbm') loadTBM(); }, 1200); }
+    else { toast(r?r.error:'Error', true); if (btn) { btn.disabled=false; btn.textContent='Mark Done'; } }
+  }).catch(function(e){ toast(e.message, true); if (btn) { btn.disabled=false; btn.textContent='Mark Done'; } });
+}
+
+// ============================================================
+// TBM ADMIN — Equipment + Tasks CRUD
+// ============================================================
+function showTBMAdminTab(name, el) {
+  document.querySelectorAll('#page-tbm-admin .atab-c').forEach(function(t){ t.classList.remove('on'); });
+  document.querySelectorAll('#page-tbm-admin .atab').forEach(function(b){ b.classList.remove('on'); });
+  document.getElementById('tatab-' + name).classList.add('on');
+  if (el) el.classList.add('on');
+  if (!S.tbmAdminLoaded[name]) {
+    if (name === 'equipment') loadTBMAdminEquipment();
+    if (name === 'tasks')     loadTBMAdminTasks();
+    S.tbmAdminLoaded[name] = true;
+  }
+}
+
+async function loadTBMAdminEquipment() {
+  try {
+    var eq = await adminGetTBMEquipment();
+    S.tbmAdminEquip = eq || [];
+    var t = document.getElementById('tbm-eq-tbl');
+    if (!eq.length) { t.innerHTML='<tr><td colspan="3" class="loading-r">No equipment yet.</td></tr>'; }
+    else {
+      t.innerHTML = eq.map(function(e){
+        return '<tr><td><code>'+(e.code||'-')+'</code></td><td><strong>'+(e.name||'')+'</strong></td>'+
+          '<td><button class="btn btn-warn btn-sm" onclick="editTBMEquipment(dec(\''+enc(e)+'\'))">Edit</button> '+
+          '<button class="btn btn-danger btn-sm" onclick="deleteTBMEquipment('+e.id+')">Delete</button></td></tr>';
+      }).join('');
+    }
+    popSel('tbm-task-equip', eq, 'id', function(e){return e.name;}, '— Select Equipment —');
+  } catch (e) { showErr('tbm-admin-error', e.message); }
+}
+function editTBMEquipment(e) {
+  document.getElementById('tbm-eq-id').value=e.id;
+  document.getElementById('tbm-eq-name').value=e.name||'';
+  document.getElementById('tbm-eq-code').value=e.code||'';
+  document.getElementById('tbm-eq-form-title').textContent='Edit Equipment';
+  window.scrollTo(0,0);
+}
+function resetTBMEquipmentForm() {
+  document.getElementById('tbm-eq-id').value='';
+  document.getElementById('tbm-eq-name').value='';
+  document.getElementById('tbm-eq-code').value='';
+  document.getElementById('tbm-eq-form-title').textContent='Add Equipment';
+}
+async function saveTBMEquipment() {
+  var name=document.getElementById('tbm-eq-name').value.trim();
+  if (!name) { showMsg('tbm-eq-msg','Name required',true); return; }
+  try {
+    var r = await adminSaveTBMEquipment({
+      id: document.getElementById('tbm-eq-id').value || null,
+      name: name, code: document.getElementById('tbm-eq-code').value.trim()
+    });
+    if (r && r.success) { showMsg('tbm-eq-msg','Saved'); resetTBMEquipmentForm(); loadTBMAdminEquipment(); }
+    else showMsg('tbm-eq-msg', r?r.error:'Failed', true);
+  } catch (e) { showMsg('tbm-eq-msg', e.message, true); }
+}
+async function deleteTBMEquipment(id) {
+  if (!confirm('Delete equipment? This also deletes its tasks.')) return;
+  await adminDeleteTBMEquipment(id);
+  loadTBMAdminEquipment();
+  S.tbmAdminLoaded.tasks = false;
+}
+
+async function loadTBMAdminTasks() {
+  try {
+    var tasks = await adminGetTBMTasks();
+    S.tbmAdminTasks = tasks || [];
+    var equipList = S.tbmAdminEquip.length ? S.tbmAdminEquip : await adminGetTBMEquipment();
+    var eqMap = {}; equipList.forEach(function(e){ eqMap[String(e.id)] = e.name; });
+    var t = document.getElementById('tbm-task-tbl');
+    if (!tasks.length) { t.innerHTML='<tr><td colspan="6" class="loading-r">No tasks yet.</td></tr>'; return; }
+    t.innerHTML = tasks.map(function(x){
+      return '<tr><td><code>'+(x.code||'-')+'</code></td><td><strong>'+(x.name||'')+'</strong></td>'+
+        '<td>'+(eqMap[String(x.equipment_id)]||'-')+'</td><td>'+(x.frequency||'-')+'</td><td>'+(x.next_due||'-')+'</td>'+
+        '<td><button class="btn btn-warn btn-sm" onclick="editTBMTask(dec(\''+enc(x)+'\'))">Edit</button> '+
+        '<button class="btn btn-danger btn-sm" onclick="deleteTBMTask('+x.id+')">Delete</button></td></tr>';
+    }).join('');
+  } catch (e) { showErr('tbm-admin-error', e.message); }
+}
+function editTBMTask(x) {
+  document.getElementById('tbm-task-id').value=x.id;
+  document.getElementById('tbm-task-equip').value=x.equipment_id;
+  document.getElementById('tbm-task-name').value=x.name||'';
+  document.getElementById('tbm-task-code').value=x.code||'';
+  document.getElementById('tbm-task-frequency').value=x.frequency||'Monthly';
+  document.getElementById('tbm-task-nextdue').value=x.next_due||'';
+  document.getElementById('tbm-task-remarks').value=x.remarks||'';
+  document.getElementById('tbm-task-form-title').textContent='Edit Task';
+  window.scrollTo(0,0);
+}
+function resetTBMTaskForm() {
+  document.getElementById('tbm-task-id').value='';
+  document.getElementById('tbm-task-equip').value='';
+  document.getElementById('tbm-task-name').value='';
+  document.getElementById('tbm-task-code').value='';
+  document.getElementById('tbm-task-frequency').value='Monthly';
+  document.getElementById('tbm-task-nextdue').value='';
+  document.getElementById('tbm-task-remarks').value='';
+  document.getElementById('tbm-task-form-title').textContent='Add Task';
+}
+async function saveTBMTask() {
+  var name=document.getElementById('tbm-task-name').value.trim();
+  var equip=document.getElementById('tbm-task-equip').value;
+  if (!equip) { showMsg('tbm-task-msg','Select equipment',true); return; }
+  if (!name)  { showMsg('tbm-task-msg','Task name required',true); return; }
+  try {
+    var r = await adminSaveTBMTask({
+      id: document.getElementById('tbm-task-id').value || null,
+      equipment_id: equip, name: name,
+      code: document.getElementById('tbm-task-code').value.trim(),
+      frequency: document.getElementById('tbm-task-frequency').value,
+      next_due: document.getElementById('tbm-task-nextdue').value || null,
+      remarks: document.getElementById('tbm-task-remarks').value.trim() || null
+    });
+    if (r && r.success) { showMsg('tbm-task-msg','Saved'); resetTBMTaskForm(); loadTBMAdminTasks(); }
+    else showMsg('tbm-task-msg', r?r.error:'Failed', true);
+  } catch (e) { showMsg('tbm-task-msg', e.message, true); }
+}
+async function deleteTBMTask(id) { if (!confirm('Delete task?')) return; await adminDeleteTBMTask(id); loadTBMAdminTasks(); }
 
 // ============================================================
 // TECHNICIAN
