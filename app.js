@@ -418,6 +418,7 @@ async function loadSchedule() {
     S.schAll = [].concat.apply([], results);
     popSel('sch-line', S.allLines, 'id', function(l){return l.name;}, 'All Lines');
     popSel('sch-area', S.allAreas, 'id', function(a){return a.name;}, 'All Areas');
+    popSel('sch-equip', S.allEquip, 'id', function(e){return e.name;}, 'All Equipment');
     var freqs = Array.from(new Set(S.schAll.map(function(p){return p.frequency;}).filter(Boolean))).sort();
     popSel('sch-freq', freqs.map(function(f){return {id:f,name:f};}), 'id', function(f){return f.name;}, 'All Frequencies');
     applySch();
@@ -428,8 +429,23 @@ var debouncedSch = debounce(applySch, 250);
 
 function schLineChanged() {
   var lid=document.getElementById('sch-line').value;
-  var filtered=lid?S.allAreas.filter(function(a){return String(a.line_id)===String(lid);}):S.allAreas;
-  popSel('sch-area',filtered,'id',function(a){return a.name;},'All Areas');
+  var filteredAreas=lid?S.allAreas.filter(function(a){return String(a.line_id)===String(lid);}):S.allAreas;
+  var filteredEquip=lid?S.allEquip.filter(function(e){return String(e.line_id)===String(lid);}):S.allEquip;
+  popSel('sch-area',filteredAreas,'id',function(a){return a.name;},'All Areas');
+  popSel('sch-equip',filteredEquip,'id',function(e){return e.name;},'All Equipment');
+  applySch();
+}
+
+function schEquipChanged() {
+  var eid=document.getElementById('sch-equip').value;
+  if (eid) {
+    var eq = S.allEquip.filter(function(e){return String(e.id)===String(eid);})[0];
+    if (eq) {
+      document.getElementById('sch-line').value = eq.line_id;
+      popSel('sch-area', S.allAreas.filter(function(a){return String(a.line_id)===String(eq.line_id);}), 'id', function(a){return a.name;}, 'All Areas');
+      document.getElementById('sch-area').value = eq.area_id;
+    }
+  }
   applySch();
 }
 
@@ -437,11 +453,13 @@ function applySch() {
   if (!S.schAll) return;
   var line=document.getElementById('sch-line').value;
   var area=document.getElementById('sch-area').value;
+  var equip=document.getElementById('sch-equip').value;
   var freq=document.getElementById('sch-freq').value;
   var q=document.getElementById('sch-search').value.toLowerCase();
   var rows = S.schAll.filter(function(p){
     return (!line||String(p.line_id)===String(line))
       && (!area||String(p.area_id)===String(area))
+      && (!equip||String(p.equip_id)===String(equip))
       && (!freq||p.frequency===freq)
       && (!q||(p.name||'').toLowerCase().indexOf(q)!==-1||(p.code||'').toLowerCase().indexOf(q)!==-1
               ||(p.lubricant_type||'').toLowerCase().indexOf(q)!==-1||(p.eq_name||'').toLowerCase().indexOf(q)!==-1);
@@ -467,9 +485,11 @@ function renderSchTbl(rows) {
 function clearSch() {
   document.getElementById('sch-line').value='';
   document.getElementById('sch-area').value='';
+  document.getElementById('sch-equip').value='';
   document.getElementById('sch-freq').value='';
   document.getElementById('sch-search').value='';
   popSel('sch-area', S.allAreas, 'id', function(a){return a.name;}, 'All Areas');
+  popSel('sch-equip', S.allEquip, 'id', function(e){return e.name;}, 'All Equipment');
   applySch();
 }
 
