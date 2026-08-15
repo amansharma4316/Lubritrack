@@ -57,7 +57,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);min-height:10
 .brand-mark{width:30px;height:30px;background:linear-gradient(155deg,var(--red),var(--red-d));border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 3px 8px rgba(183,53,31,.25)}
 .brand-mark svg{width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .brand-name{font-size:14px;font-weight:700;color:var(--ink);letter-spacing:-.2px}
-.nav-links{display:flex;align-items:center;gap:2px;flex:1}
+.nav-links{display:flex;align-items:center;gap:2px;flex:1;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none}
+.nav-links::-webkit-scrollbar{display:none}
 .nl{padding:7px 13px;border-radius:20px;font-size:13px;font-weight:500;color:var(--ink-3);cursor:pointer;border:none;background:none;font-family:var(--font);transition:background .15s var(--ease),color .15s var(--ease);white-space:nowrap}
 .nl:hover{background:var(--bg-2);color:var(--ink)}
 .nl.on{background:var(--red-l);color:var(--red-d);font-weight:600}
@@ -212,34 +213,80 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:2px 6px
 
 /* ── RESPONSIVE ─────────────────────────────────────── */
 @media(max-width:768px){
-  .bar{padding:0 12px;gap:4px;height:52px}
+  .bar{padding:0 10px;gap:4px;height:52px}
+  .brand{margin-right:8px}
   .brand-name{display:none}
-  .nl{padding:6px 10px;font-size:12px}
+  .nl{padding:6px 10px;font-size:12px;flex-shrink:0}
   .role-tag{display:none}
+  .bar-right{gap:6px}
+  .signout-btn{padding:6px 8px;font-size:0}
+  .signout-btn::before{content:'⏻';font-size:15px}
   .pg{padding:14px}
-  .stat-row{grid-template-columns:repeat(3,1fr);gap:10px}
-  .sc{padding:14px 12px}
-  .sc-num{font-size:25px}
-  .sc-lbl{font-size:10.5px}
+
+  .stat-row{grid-template-columns:repeat(3,1fr);gap:8px}
+  .sc{padding:12px 10px}
+  .sc-num{font-size:22px}
+  .sc-lbl{font-size:9.5px}
   .sc-icon{display:none}
-  th{padding:8px 11px;font-size:10px}
-  td{padding:10px 11px;font-size:12px}
+
+  th{padding:8px 10px;font-size:10px}
+  td{padding:9px 10px;font-size:12px}
+  .btn{padding:6px 11px;font-size:11.5px}
   .btn-lg{padding:9px 16px;font-size:12.5px}
+
+  /* toolbars / panel headers: stack full-width, no more squeezed inline widths */
+  .ph,.toolbar{padding:12px 14px}
+  .ph select,.toolbar select,
+  .ph input,.toolbar input,
+  .sch-search-input{width:100% !important;flex:1 1 auto}
+  .ph .btn,.toolbar .btn{flex:0 0 auto}
+
   .fsec{padding:14px}
   .frow{grid-template-columns:1fr}
+  .fg select,.fg input{font-size:16px} /* prevents iOS auto-zoom on focus */
+
   .eq-head{padding:14px}
   .eq-head h2{font-size:15px}
+
   .fpills{gap:5px}
   .fp{padding:6px 12px;font-size:11.5px}
-  .admin-tabs{overflow-x:auto}
-  .atab{padding:8px 13px;font-size:12px;white-space:nowrap}
+
+  .admin-tabs{overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none;-ms-overflow-style:none}
+  .admin-tabs::-webkit-scrollbar{display:none}
+  .atab{padding:8px 13px;font-size:12px;white-space:nowrap;flex-shrink:0}
+
+  .sched-sub-tabs{overflow-x:auto;flex-wrap:nowrap}
+  .sst{padding:8px 14px;font-size:12px;white-space:nowrap;flex-shrink:0}
+
+  .part-card{flex-direction:row}
   .part-card .pc-body{padding:12px 14px}
-  .pagination{padding:10px 12px;gap:6px}
+  .pc-main{flex-direction:column;align-items:flex-start;gap:6px}
+  .pc-foot{flex-direction:column;align-items:stretch;gap:10px}
+  .pc-foot .btn{width:100%;justify-content:center}
+
+  .pagination{padding:10px 12px;gap:6px;justify-content:center}
+  .pg-info{width:100%;text-align:center;margin-left:0;order:10}
+
   .back{font-size:12px;margin-bottom:12px}
+
+  .login-card{padding:34px 24px}
+  .auth-wrap{padding:14px}
+
+  .area-list{min-width:0}
+  .summary-bar{gap:0}
+  .sb-cell{padding:8px 12px;font-size:11.5px}
+  .preview-head{padding:12px 14px}
+
+  .hier{font-size:11px;padding:7px 10px}
 }
 @media(max-width:480px){
-  .stat-row{grid-template-columns:repeat(3,1fr)}
-  .sc-num{font-size:19px}
+  .stat-row{grid-template-columns:repeat(3,1fr);gap:6px}
+  .sc-num{font-size:18px}
+  .sc-lbl{font-size:9px}
   .bar{height:48px}
   .pg{padding:10px}
+  .login-card{padding:28px 18px}
+  th{font-size:9px;padding:7px 8px}
+  td{font-size:11.5px;padding:8px 8px}
+  .part-card{flex-direction:row}
 }
