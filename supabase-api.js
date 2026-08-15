@@ -258,3 +258,86 @@ async function adminDeleteUser(id) {
   const { error } = await sb.from('app_users').delete().eq('id', id);
   return error ? { success: false, error: error.message } : { success: true };
 }
+
+// ============================================================
+// TBM (TIME BASED MAINTENANCE) — same Supabase project/session,
+// separate tables (tbm_equipment, tbm_tasks). See tbm_schema.sql.
+// ============================================================
+
+// ------------------------------------------------------------
+// DASHBOARD + SCHEDULE
+// ------------------------------------------------------------
+async function getTBMDashboardData() {
+  const { data, error } = await sb.rpc('get_tbm_dashboard_data');
+  if (error) return { success: false, error: error.message };
+  return data;
+}
+
+async function getTBMSchedule() {
+  const { data, error } = await sb.rpc('get_tbm_full_schedule');
+  if (error) return { success: false, error: error.message };
+  return { success: true, tasks: data };
+}
+
+// ------------------------------------------------------------
+// MARK DONE  (RPC, transactional server-side)
+// ------------------------------------------------------------
+async function markTBMDone(taskId, remarks) {
+  const { data, error } = await sb.rpc('mark_tbm_done', { p_task_id: taskId, p_remarks: remarks || null });
+  if (error) return { success: false, error: error.message };
+  return data;
+}
+
+// ------------------------------------------------------------
+// ADMIN CRUD — TBM Equipment
+// ------------------------------------------------------------
+async function adminGetTBMEquipment() {
+  const { data, error } = await sb.from('tbm_equipment').select('*').order('name');
+  if (error) return [];
+  return data;
+}
+async function adminSaveTBMEquipment(data) {
+  const payload = { name: data.name, code: data.code };
+  const q = data.id
+    ? sb.from('tbm_equipment').update(payload).eq('id', data.id)
+    : sb.from('tbm_equipment').insert(payload);
+  const { error } = await q;
+  return error ? { success: false, error: error.message } : { success: true };
+}
+async function adminDeleteTBMEquipment(id) {
+  const { error } = await sb.from('tbm_equipment').delete().eq('id', id);
+  return error ? { success: false, error: error.message } : { success: true };
+}
+
+// ------------------------------------------------------------
+// ADMIN CRUD — TBM Tasks  (auto code like TSK-01, TSK-02…)
+// ------------------------------------------------------------
+async function adminGetTBMTasks() {
+  const { data, error } = await sb.from('tbm_tasks').select('*').order('name');
+  if (error) return [];
+  return data;
+}
+async function adminSaveTBMTask(data) {
+  if (data.id) {
+    const { error } = await sb.from('tbm_tasks').update({
+      name: data.name, equipment_id: data.equipment_id, frequency: data.frequency,
+      next_due: data.next_due, remarks: data.remarks, code: data.code
+    }).eq('id', data.id);
+    return error ? { success: false, error: error.message } : { success: true };
+  }
+
+  let code = data.code;
+  if (!code) {
+    const { data: existing } = await sb.from('tbm_tasks').select('id').eq('equipment_id', data.equipment_id);
+    code = 'TSK-' + String((existing?.length || 0) + 1).padStart(2, '0');
+  }
+  const { error } = await sb.from('tbm_tasks').insert({
+    name: data.name, equipment_id: data.equipment_id, frequency: data.frequency,
+    next_due: data.next_due, remarks: data.remarks || null, done: 'No', code
+  });
+  return error ? { success: false, error: error.message } : { success: true };
+}
+async function adminDeleteTBMTask(id) {
+  const { error } = await sb.from('tbm_tasks').delete().eq('id', id);
+  return error ? { success: false, error: error.message } : { success: true };
+}
