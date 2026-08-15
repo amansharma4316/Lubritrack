@@ -211,6 +211,16 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:2px 6px
 ::-webkit-scrollbar-thumb{background:var(--ink-5);border-radius:20px;border:2px solid var(--bg)}
 ::-webkit-scrollbar-thumb:hover{background:var(--ink-4)}
 
+/* ── TBM THEME OVERRIDE ──────────────────────────────
+   Same layout/components — flips the primary brand colour
+   (red family) to green everywhere it's used: buttons, active
+   nav, logo mark, badges, accents, "missed" stat card, etc.
+   Just toggle body.tbm-theme; no other CSS changes needed. */
+body.tbm-theme{
+  --red:#178A54;--red-d:#116840;--red-l:#E7F6EE;--red-ll:#F3FBF6;
+}
+#mode-switch-btn{font-weight:600}
+
 /* ── RESPONSIVE ─────────────────────────────────────── */
 @media(max-width:768px){
   .bar{padding:0 10px;gap:4px;height:52px}
