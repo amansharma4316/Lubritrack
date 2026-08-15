@@ -15,6 +15,7 @@ var S = {
   allEquip:[], allLines:[], allAreas:[],
   adminLines:[], adminAreas:[], adminEquip:[],
   gpPage:0, gpPageSize:50, gpTotal:0,
+  schAll:null,
   adminTabLoaded:{}, adminData:null,
   histOffset:0, histTotal:0, histHasMore:false
 };
@@ -113,6 +114,8 @@ function buildNav() {
     h += '<button class="nl" id="nl-dashboard" onclick="showPage(\'dashboard\')">Dashboard</button>';
   h += '<button class="nl" id="nl-technician" onclick="showPage(\'technician\')">Tasks</button>';
   if (currentUser.role !== 'technician')
+    h += '<button class="nl" id="nl-schedule" onclick="showPage(\'schedule\')">Schedule</button>';
+  if (currentUser.role !== 'technician')
     h += '<button class="nl" id="nl-line-history" onclick="showPage(\'line-history\')">Line History</button>';
   if (currentUser.role === 'admin')
     h += '<button class="nl" id="nl-admin" onclick="showPage(\'admin\')">Admin</button>';
@@ -129,7 +132,7 @@ function setActiveNav(page) {
 function showPage(page, params) {
   params = params || {};
   if (page === 'admin' && currentUser.role !== 'admin') return;
-  if (['dashboard','global-parts','equipment','history'].indexOf(page) !== -1 && currentUser.role === 'technician') { showPage('technician'); return; }
+  if (['dashboard','global-parts','equipment','history','schedule'].indexOf(page) !== -1 && currentUser.role === 'technician') { showPage('technician'); return; }
   document.querySelectorAll('.pg').forEach(function(p){ p.classList.remove('on'); });
   var el = document.getElementById('page-' + page);
   if (!el) return;
@@ -141,6 +144,7 @@ function showPage(page, params) {
   else if (page === 'global-parts') { S.globalFilter = params.filter || 'today'; S.gpPage = 0; loadGP(); }
   else if (page === 'equipment')    { if (params.id != null) S.equipId = params.id; S.partFilter = 'all'; resetPFilterTabs(); loadEqPage(); }
   else if (page === 'history')      { if (params.id != null) S.equipId = params.id; S.histOffset = 0; S.histTotal = 0; S.histHasMore = false; loadHist(false); }
+  else if (page === 'schedule')     loadSchedule();
   else if (page === 'line-history') loadLHPage();
   else if (page === 'admin')        { S.adminData = null; S.adminTabLoaded = {}; showAdminTab('lines', document.querySelector('.atab')); }
 }
@@ -371,6 +375,103 @@ function renderGP(d) {
 }
 function gpPage(dir){S.gpPage+=dir;loadGP();}
 function gpMark(id){optimisticMark('gpb-'+id,id,function(){setTimeout(function(){if(S.page==='global-parts')loadGP();},1800);});}
+
+// ============================================================
+// FULL LUBRICATION SCHEDULE  (every part, every equipment —
+// built from the same proven endpoints as Dashboard + Equipment
+// pages: getDashboardData for the equipment list, then
+// getEquipmentPageData(id,'all') per equipment for its parts.)
+// ============================================================
+async function loadSchedule() {
+  document.getElementById('sch-error').style.display='none';
+  document.getElementById('sch-tbl').innerHTML='<tr><td colspan="10" class="loading-r">Loading…</td></tr>';
+  document.getElementById('sch-info').textContent='';
+  try {
+    if (!S.allEquip.length || !S.allLines.length) {
+      var dd = await getDashboardData(currentUser.area_ids||'');
+      if (dd && dd.success) { S.allEquip=dd.equipment||[]; S.allLines=dd.lines||[]; S.allAreas=dd.areas||[]; }
+    }
+    if (!S.allEquip.length) {
+      document.getElementById('sch-tbl').innerHTML='<tr><td colspan="11"><div class="empty"><h3>No equipment yet</h3><p>Add lines, areas and equipment via Admin first.</p></div></td></tr>';
+      return;
+    }
+    var lMap={}, aMap={};
+    S.allLines.forEach(function(l){lMap[String(l.id)]=l.name;});
+    S.allAreas.forEach(function(a){aMap[String(a.id)]=a.name;});
+
+    var results = await Promise.all(S.allEquip.map(function(eq){
+      return getEquipmentPageData(eq.id,'all').then(function(d){
+        var parts = (d && d.success) ? (d.parts||[]) : [];
+        return parts.map(function(p){
+          return {
+            line_id: eq.line_id, area_id: eq.area_id, equip_id: eq.id,
+            line_name: lMap[String(eq.line_id)]||'-', area_name: aMap[String(eq.area_id)]||'-',
+            eq_name: eq.name||'-', eq_code: eq.code||'-',
+            code: p.code, name: p.name, lubricant_type: p.lubricant_type,
+            frequency: p.frequency, last_done: p.last_done, next_due: p.next_due,
+            lubricated: p.lubricated, id: p.id
+          };
+        });
+      }).catch(function(){ return []; });
+    }));
+
+    S.schAll = [].concat.apply([], results);
+    popSel('sch-line', S.allLines, 'id', function(l){return l.name;}, 'All Lines');
+    popSel('sch-area', S.allAreas, 'id', function(a){return a.name;}, 'All Areas');
+    var freqs = Array.from(new Set(S.schAll.map(function(p){return p.frequency;}).filter(Boolean))).sort();
+    popSel('sch-freq', freqs.map(function(f){return {id:f,name:f};}), 'id', function(f){return f.name;}, 'All Frequencies');
+    applySch();
+  } catch (e) { showErr('sch-error', e.message); }
+}
+
+var debouncedSch = debounce(applySch, 250);
+
+function schLineChanged() {
+  var lid=document.getElementById('sch-line').value;
+  var filtered=lid?S.allAreas.filter(function(a){return String(a.line_id)===String(lid);}):S.allAreas;
+  popSel('sch-area',filtered,'id',function(a){return a.name;},'All Areas');
+  applySch();
+}
+
+function applySch() {
+  if (!S.schAll) return;
+  var line=document.getElementById('sch-line').value;
+  var area=document.getElementById('sch-area').value;
+  var freq=document.getElementById('sch-freq').value;
+  var q=document.getElementById('sch-search').value.toLowerCase();
+  var rows = S.schAll.filter(function(p){
+    return (!line||String(p.line_id)===String(line))
+      && (!area||String(p.area_id)===String(area))
+      && (!freq||p.frequency===freq)
+      && (!q||(p.name||'').toLowerCase().indexOf(q)!==-1||(p.code||'').toLowerCase().indexOf(q)!==-1
+              ||(p.lubricant_type||'').toLowerCase().indexOf(q)!==-1||(p.eq_name||'').toLowerCase().indexOf(q)!==-1);
+  });
+  renderSchTbl(rows);
+}
+
+function renderSchTbl(rows) {
+  var tbody=document.getElementById('sch-tbl');
+  document.getElementById('sch-info').textContent=rows.length+' part'+(rows.length===1?'':'s')+' in schedule';
+  if (!rows.length) { tbody.innerHTML='<tr><td colspan="11"><div class="empty"><h3>No matching parts</h3><p>Try clearing filters.</p></div></td></tr>'; return; }
+  tbody.innerHTML = rows.map(function(p){
+    var canView = currentUser.role==='admin'||currentUser.role==='manager';
+    var act = canView ? '<button class="btn btn-ghost btn-sm" onclick="showPage(\'equipment\',{id:\''+p.equip_id+'\'})">View</button>' : '';
+    return '<tr><td>'+(p.line_name||'-')+'</td><td>'+(p.area_name||'-')+'</td><td>'+(p.eq_name||'-')+'</td>'+
+      '<td><code>'+(p.code||'-')+'</code></td><td><strong>'+(p.name||'')+'</strong></td>'+
+      '<td>'+(p.lubricant_type||'-')+'</td><td>'+(p.frequency||'-')+'</td>'+
+      '<td>'+(p.last_done||'-')+'</td><td>'+(p.next_due||'-')+'</td>'+
+      '<td>'+statusBadge(p)+'</td><td>'+act+'</td></tr>';
+  }).join('');
+}
+
+function clearSch() {
+  document.getElementById('sch-line').value='';
+  document.getElementById('sch-area').value='';
+  document.getElementById('sch-freq').value='';
+  document.getElementById('sch-search').value='';
+  popSel('sch-area', S.allAreas, 'id', function(a){return a.name;}, 'All Areas');
+  applySch();
+}
 
 // ============================================================
 // TECHNICIAN
