@@ -20,12 +20,13 @@
 
 <!-- NAVBAR -->
 <nav class="bar" id="navbar" style="display:none">
-  <a class="brand" onclick="showPage('dashboard')">
+  <a class="brand" onclick="showPage(S.appMode==='tbm'?'tbm':'dashboard')">
     <div class="brand-mark"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/><circle cx="18.5" cy="5.5" r="2.5"/></svg></div>
-    <span class="brand-name">LubriTrack- Rusk</span>
+    <span class="brand-name" id="brand-name">LubriTrack- Rusk</span>
   </a>
   <div class="nav-links" id="nav-links"></div>
   <div class="bar-right">
+    <button class="btn btn-ghost btn-sm" id="mode-switch-btn" onclick="toggleAppMode()">TBM →</button>
     <span class="role-tag" id="role-tag"></span>
     <button class="signout-btn" onclick="handleSignOut()">Sign out</button>
     <div class="avatar" id="user-avatar" title="Sign out" onclick="handleSignOut()"></div>
@@ -457,6 +458,88 @@
   </div>
 
 </div><!-- /admin page -->
+
+<!-- ══════════════════════════════════════════════════
+     TBM — TIME BASED MAINTENANCE (green theme)
+══════════════════════════════════════════════════ -->
+<div id="page-tbm" class="pg">
+  <div id="tbm-error" class="err-bar"></div>
+  <div class="stat-row" id="tbm-cards"><div style="grid-column:1/-1;text-align:center;padding:28px;color:var(--ink-4)">Loading…</div></div>
+
+  <div class="panel">
+    <div class="ph">
+      <span class="ph-title">TBM Schedule</span>
+      <select id="tbm-equip" onchange="applyTBM()" style="font-size:12.5px;padding:5px 9px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);font-family:var(--font)"><option value="">All Equipment</option></select>
+      <select id="tbm-freq" onchange="applyTBM()" style="font-size:12.5px;padding:5px 9px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);font-family:var(--font)"><option value="">All Frequencies</option></select>
+      <select id="tbm-status" onchange="applyTBM()" style="font-size:12.5px;padding:5px 9px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);font-family:var(--font)">
+        <option value="">All Status</option><option value="today">Due Today</option><option value="week">Upcoming (7d)</option><option value="missed">Missed</option>
+      </select>
+      <input type="text" id="tbm-search" placeholder="Search task, code…" oninput="debouncedTBM()" style="padding:5px 9px;border:1px solid var(--border);border-radius:var(--r);font-size:12.5px;font-family:var(--font);width:190px" class="sch-search-input">
+      <button class="btn btn-ghost btn-sm" onclick="clearTBM()">Clear</button>
+      <button class="btn btn-info btn-sm" onclick="exportCSV('tbm-tbl','TBM_Schedule.csv')" style="margin-left:auto">↓ Export</button>
+    </div>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Equipment</th><th>Code</th><th>Task</th><th>Frequency</th><th>Last Done</th><th>Next Due</th><th>Remarks</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody id="tbm-tbl"><tr><td colspan="9" class="loading-r">Loading…</td></tr></tbody>
+      </table>
+    </div>
+    <div id="tbm-info" style="padding:11px 16px;border-top:1px solid var(--border-soft);font-size:11.5px;color:var(--ink-4)"></div>
+  </div>
+</div>
+
+<!-- TBM ADMIN -->
+<div id="page-tbm-admin" class="pg">
+  <div id="tbm-admin-error" class="err-bar"></div>
+  <div class="admin-tabs">
+    <button class="atab on" onclick="showTBMAdminTab('equipment',this)">Equipment</button>
+    <button class="atab" onclick="showTBMAdminTab('tasks',this)">Tasks</button>
+  </div>
+
+  <!-- EQUIPMENT -->
+  <div id="tatab-equipment" class="atab-c on">
+    <div class="fsec">
+      <h3 id="tbm-eq-form-title">Add Equipment</h3>
+      <div id="tbm-eq-msg"></div>
+      <input type="hidden" id="tbm-eq-id">
+      <div class="frow">
+        <div class="fg"><label>Equipment Name</label><input id="tbm-eq-name" placeholder="e.g. Boiler Feed Pump"></div>
+        <div class="fg"><label>Code</label><input id="tbm-eq-code" placeholder="e.g. BFP-01"></div>
+      </div>
+      <div style="display:flex;gap:7px"><button class="btn btn-primary" onclick="saveTBMEquipment()">Save</button><button class="btn btn-ghost" onclick="resetTBMEquipmentForm()">Clear</button></div>
+    </div>
+    <div class="panel"><div class="tw"><table>
+      <thead><tr><th>Code</th><th>Equipment</th><th>Actions</th></tr></thead>
+      <tbody id="tbm-eq-tbl"><tr><td colspan="3" class="loading-r">Loading…</td></tr></tbody>
+    </table></div></div>
+  </div>
+
+  <!-- TASKS -->
+  <div id="tatab-tasks" class="atab-c">
+    <div class="fsec">
+      <h3 id="tbm-task-form-title">Add Task</h3>
+      <div id="tbm-task-msg"></div>
+      <input type="hidden" id="tbm-task-id">
+      <div class="frow">
+        <div class="fg"><label>Equipment</label><select id="tbm-task-equip"><option value="">— Select Equipment —</option></select></div>
+        <div class="fg"><label>Task Name</label><input id="tbm-task-name" placeholder="e.g. Inspect coupling alignment"></div>
+        <div class="fg"><label>Task Code</label><input id="tbm-task-code" placeholder="auto if blank"></div>
+        <div class="fg"><label>Frequency</label>
+          <select id="tbm-task-frequency"><option>Daily</option><option>Weekly</option><option selected>Monthly</option><option>Quarterly</option></select>
+        </div>
+        <div class="fg"><label>Next Due Date</label><input id="tbm-task-nextdue" type="date"></div>
+      </div>
+      <div class="frow">
+        <div class="fg" style="grid-column:1/-1"><label>Remarks <span style="color:var(--ink-4);font-weight:400;text-transform:none;font-size:10px">(optional)</span></label><input id="tbm-task-remarks" placeholder="Any notes for this task"></div>
+      </div>
+      <div style="display:flex;gap:7px"><button class="btn btn-primary" onclick="saveTBMTask()">Save</button><button class="btn btn-ghost" onclick="resetTBMTaskForm()">Clear</button></div>
+    </div>
+    <div class="panel"><div class="tw"><table>
+      <thead><tr><th>Code</th><th>Task</th><th>Equipment</th><th>Frequency</th><th>Next Due</th><th>Actions</th></tr></thead>
+      <tbody id="tbm-task-tbl"><tr><td colspan="6" class="loading-r">Loading…</td></tr></tbody>
+    </table></div></div>
+  </div>
+</div>
 
 <div class="toast" id="toast"></div>
 
