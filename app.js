@@ -1105,17 +1105,98 @@ async function loadAdminParts() {
   document.getElementById('p-equipment').innerHTML='<option value="">— Select Area first —</option>';document.getElementById('p-equipment').disabled=true;
   var am={},lm={},em={};
   d.areas.forEach(function(a){am[String(a.id)]=a;});d.lines.forEach(function(l){lm[String(l.id)]=l.name;});d.equipment.forEach(function(e){em[String(e.id)]=e;});
+  S._partsAdminMaps = { am:am, lm:lm, em:em };
+  S.partsCache = d.parts || [];
+  S.partsBulkEdit = false;
+  setBulkEditButtons(false);
+  renderPartsAdminTable();
+}
+
+// Bulk (tabular) edit for the Parts admin table — lets the admin edit
+// several rows inline and save them all in one go, instead of using the
+// "Add Part" form one row at a time. Uses the same adminSavePart(...)
+// API call as the single-row Edit flow, just looped over the changed rows.
+function setBulkEditButtons(editing) {
+  var tb=document.getElementById('bulk-edit-toggle-btn'), sb=document.getElementById('bulk-save-btn'), cb=document.getElementById('bulk-cancel-btn');
+  if (tb) tb.style.display = editing ? 'none' : '';
+  if (sb) sb.style.display = editing ? '' : 'none';
+  if (cb) cb.style.display = editing ? '' : 'none';
+}
+
+function renderPartsAdminTable() {
+  var maps = S._partsAdminMaps || {};
+  var am=maps.am||{}, lm=maps.lm||{}, em=maps.em||{};
   var t=document.getElementById('parts-tbl-admin');
-  var parts=d.parts||[];
+  var parts=S.partsCache||[];
   if(!parts.length){t.innerHTML='<tr><td colspan="9" class="loading-r">No parts yet.</td></tr>';return;}
+  var editing = !!S.partsBulkEdit;
+  var freqOpts=['Daily','Weekly','Monthly','Quarterly'];
+  var esc=function(s){ return String(s==null?'':s).replace(/"/g,'&quot;'); };
   t.innerHTML=parts.map(function(p){
     var e=em[String(p.equipment_id)]||{},a=am[String(e.area_id)]||{};
-    return '<tr><td><code>'+(p.code||'-')+'</code></td><td><strong>'+(p.name||'')+'</strong></td>'+
+    if (!editing) {
+      return '<tr><td><code>'+(p.code||'-')+'</code></td><td><strong>'+(p.name||'')+'</strong></td>'+
+        '<td>'+(e.name||'-')+'</td><td>'+(a.name||'-')+'</td><td>'+(lm[String(e.line_id)]||'-')+'</td>'+
+        '<td>'+(p.lubricant_type||'-')+'</td><td>'+(p.frequency||'-')+'</td><td>'+(p.next_due||'-')+'</td>'+
+        '<td><button class="btn btn-warn btn-sm" onclick="editPart(dec(\''+enc(p)+'\'))">Edit</button> '+
+        '<button class="btn btn-danger btn-sm" onclick="deletePart('+p.id+')">Delete</button></td></tr>';
+    }
+    var inputCss='width:100%;min-width:80px;padding:5px 7px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:var(--font)';
+    var freqSel = '<select id="bpf-'+p.id+'" style="'+inputCss+'">' +
+      freqOpts.map(function(f){ return '<option value="'+f+'"'+(p.frequency===f?' selected':'')+'>'+f+'</option>'; }).join('') + '</select>';
+    return '<tr data-part-id="'+p.id+'">' +
+      '<td><input id="bpc-'+p.id+'" value="'+esc(p.code)+'" style="'+inputCss+';font-family:var(--mono)"></td>'+
+      '<td><input id="bpn-'+p.id+'" value="'+esc(p.name)+'" style="'+inputCss+'"></td>'+
       '<td>'+(e.name||'-')+'</td><td>'+(a.name||'-')+'</td><td>'+(lm[String(e.line_id)]||'-')+'</td>'+
-      '<td>'+(p.lubricant_type||'-')+'</td><td>'+(p.frequency||'-')+'</td><td>'+(p.next_due||'-')+'</td>'+
-      '<td><button class="btn btn-warn btn-sm" onclick="editPart(dec(\''+enc(p)+'\'))">Edit</button> '+
-      '<button class="btn btn-danger btn-sm" onclick="deletePart('+p.id+')">Delete</button></td></tr>';
+      '<td><input id="bpl-'+p.id+'" value="'+esc(p.lubricant_type)+'" style="'+inputCss+'"></td>'+
+      '<td>'+freqSel+'</td>'+
+      '<td><input id="bpd-'+p.id+'" type="date" value="'+esc(p.next_due)+'" style="'+inputCss+'"></td>'+
+      '<td><button class="btn btn-danger btn-sm" onclick="deletePart('+p.id+')">Delete</button></td></tr>';
   }).join('');
+}
+
+function toggleBulkEditParts() {
+  S.partsBulkEdit = true;
+  setBulkEditButtons(true);
+  renderPartsAdminTable();
+}
+
+function cancelBulkEditParts() {
+  S.partsBulkEdit = false;
+  setBulkEditButtons(false);
+  renderPartsAdminTable();
+}
+
+async function saveBulkParts() {
+  var parts = S.partsCache || [];
+  var changed = [];
+  parts.forEach(function(p){
+    var codeEl=document.getElementById('bpc-'+p.id), nameEl=document.getElementById('bpn-'+p.id),
+        lubEl=document.getElementById('bpl-'+p.id), freqEl=document.getElementById('bpf-'+p.id), dueEl=document.getElementById('bpd-'+p.id);
+    if (!codeEl || !nameEl || !lubEl || !freqEl || !dueEl) return; // row not in edit mode
+    var code=codeEl.value.trim(), name=nameEl.value.trim(), lub=lubEl.value.trim(), freq=freqEl.value, due=dueEl.value || '';
+    var origDue = p.next_due || '';
+    if (code!==(p.code||'') || name!==(p.name||'') || lub!==(p.lubricant_type||'') || freq!==(p.frequency||'') || due!==origDue) {
+      if (!name) return; // skip rows with a blank name — same requirement as the single-row form
+      changed.push({ id:p.id, equipment_id:p.equipment_id, name:name, code:code, lubricant_type:lub, frequency:freq, next_due:due || null });
+    }
+  });
+  if (!changed.length) { toast('No changes to save'); cancelBulkEditParts(); return; }
+  var btn=document.getElementById('bulk-save-btn');
+  if (btn) { btn.disabled=true; btn.textContent='Saving…'; }
+  try {
+    var results = await Promise.all(changed.map(function(c){ return adminSavePart(c); }));
+    var failed = results.filter(function(r){ return !r || !r.success; });
+    if (failed.length) toast(failed.length+' of '+changed.length+' row'+(changed.length===1?'':'s')+' failed to save', true);
+    else toast('Saved '+changed.length+' part'+(changed.length===1?'':'s'));
+    invalidateAdmin();
+    S.partsBulkEdit = false;
+    setBulkEditButtons(false);
+    await loadAdminParts();
+  } catch (e) {
+    toast(e.message, true);
+    if (btn) { btn.disabled=false; btn.textContent='💾 Save All'; }
+  }
 }
 function partLineChanged(){var lid=document.getElementById('p-line').value,pa=document.getElementById('p-area'),pe=document.getElementById('p-equipment');pe.innerHTML='<option value="">— Select Area first —</option>';pe.disabled=true;if(!lid){pa.innerHTML='<option value="">— Select Line first —</option>';pa.disabled=true;return;}var f=S.adminAreas.filter(function(a){return String(a.line_id)===String(lid);});pa.disabled=false;popSel('p-area',f,'id',function(a){return a.name;},'— Select Area —');}
 function partAreaChanged(){var aid=document.getElementById('p-area').value,pe=document.getElementById('p-equipment');if(!aid){pe.innerHTML='<option value="">— Select Area first —</option>';pe.disabled=true;return;}var f=S.adminEquip.filter(function(e){return String(e.area_id)===String(aid);});pe.disabled=false;popSel('p-equipment',f,'id',function(e){return e.code+' — '+e.name;},'— Select Equipment —');}
