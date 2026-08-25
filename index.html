@@ -294,10 +294,18 @@
       </div>
       <div style="display:flex;gap:7px"><button class="btn btn-primary" onclick="savePart()">Save</button><button class="btn btn-ghost" onclick="resetPartForm()">Clear</button></div>
     </div>
-    <div class="panel"><div class="tw"><table>
-      <thead><tr><th>Code</th><th>Part</th><th>Equipment</th><th>Area</th><th>Line</th><th>Lubricant</th><th>Frequency</th><th>Next Due</th><th>Actions</th></tr></thead>
-      <tbody id="parts-tbl-admin"><tr><td colspan="9" class="loading-r">Loading…</td></tr></tbody>
-    </table></div></div>
+    <div class="panel">
+      <div class="ph">
+        <span class="ph-title">All Parts</span>
+        <button class="btn btn-info btn-sm" id="bulk-edit-toggle-btn" onclick="toggleBulkEditParts()">✎ Bulk Edit</button>
+        <button class="btn btn-primary btn-sm" id="bulk-save-btn" onclick="saveBulkParts()" style="display:none">💾 Save All</button>
+        <button class="btn btn-ghost btn-sm" id="bulk-cancel-btn" onclick="cancelBulkEditParts()" style="display:none">✕ Cancel</button>
+      </div>
+      <div class="tw"><table>
+        <thead><tr><th>Code</th><th>Part</th><th>Equipment</th><th>Area</th><th>Line</th><th>Lubricant</th><th>Frequency</th><th>Next Due</th><th>Actions</th></tr></thead>
+        <tbody id="parts-tbl-admin"><tr><td colspan="9" class="loading-r">Loading…</td></tr></tbody>
+      </table></div>
+    </div>
   </div>
 
   <!-- SCHEDULE -->
