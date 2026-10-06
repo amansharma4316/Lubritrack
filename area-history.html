@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Area History — Lubrication Tracker</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<nav class="bar" id="navbar" style="display:none">
+  <a class="brand" href="index.html">
+    <div class="brand-mark"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/><circle cx="18.5" cy="5.5" r="2.5"/></svg></div>
+    <span class="brand-name">LubriTrack- Rusk</span>
+  </a>
+  <div class="nav-links">
+    <button class="nl" onclick="location.href='index.html'">← Back to app</button>
+    <button class="nl on">Area History</button>
+  </div>
+  <div class="bar-right">
+    <span class="role-tag" id="role-tag"></span>
+    <button class="signout-btn" onclick="handleSignOut()">Sign out</button>
+    <div class="avatar" id="user-avatar" title="Sign out" onclick="handleSignOut()"></div>
+  </div>
+</nav>
+
+<div id="page-area-history" class="pg on">
+  <div id="ah-error" class="err-bar"></div>
+  <div class="panel" style="margin-bottom:18px">
+    <div class="ph"><span class="ph-title">Area-wise Lubrication History</span></div>
+    <div style="padding:14px 18px;display:flex;gap:11px;align-items:flex-end;flex-wrap:wrap;background:var(--bg);border-bottom:1px solid var(--border)">
+      <div class="fg" style="flex:1;min-width:200px;max-width:320px;margin:0">
+        <label>Area</label>
+        <select id="ah-sel" onchange="ahAreaChanged()" style="padding:8px 11px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--surface);font-family:var(--font)">
+          <option value="">Loading areas…</option>
+        </select>
+      </div>
+      <button class="btn btn-info btn-sm" id="ah-export" onclick="ahExport()" disabled>↓ Export All</button>
+    </div>
+    <div id="ah-summary" style="display:none;padding:10px 18px;background:var(--blue-l);border-bottom:1px solid var(--border);font-size:12.5px;color:var(--blue)"></div>
+  </div>
+
+  <div class="panel" id="ah-panel" style="display:none">
+    <div class="ph">
+      <span class="ph-title" id="ah-panel-title">History</span>
+      <span id="ah-count" style="font-size:11.5px;color:var(--ink-4);margin-left:auto"></span>
+    </div>
+    <div class="tw">
+      <table>
+        <thead><tr><th>#</th><th>Line</th><th>Area</th><th>Equipment</th><th>Part</th><th>Lubricated On</th><th>By</th><th>Frequency</th><th>Next Due</th></tr></thead>
+        <tbody id="ah-tbl"><tr><td colspan="9" class="loading-r">Select an area to load history.</td></tr></tbody>
+      </table>
+    </div>
+    <div class="load-more-row" id="ah-lm" style="display:none">
+      <button class="btn btn-ghost" onclick="ahLoadMore()">Load More</button>
+      <span id="ah-lm-info" style="font-size:11.5px;color:var(--ink-4);margin-left:10px"></span>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
+<script src="supabase-api.js"></script>
+<script src="area-history.js"></script>
+</body>
+</html>
