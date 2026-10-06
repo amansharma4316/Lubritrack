@@ -40,6 +40,27 @@ function todayLocal() {
   var d = new Date(); d.setHours(0,0,0,0); return d;
 }
 
+var AREA_ORDER = ['mixing','divider','proofer','swing oven','depanner','cooler','slicer',
+                  'tunnel oven','cooling conveyor','packing table','packing','cbb elevator'];
+function areaRank(name) {
+  var n = String(name||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  var best = 999, len = 0;
+  AREA_ORDER.forEach(function(k,i){ if (n.indexOf(k)!==-1 && k.length>len) { best=i; len=k.length; } });
+  return best;
+}
+function applyDashOrder(d) {
+  var aMap={}, lMap={};
+  (d.areas||[]).forEach(function(a){ aMap[String(a.id)]=a.name; });
+  (d.lines||[]).forEach(function(l){ lMap[String(l.id)]=l.name; });
+  var nat = function(a,b){ return String(a||'').localeCompare(String(b||''), undefined, {numeric:true}); };
+  d.areas = (d.areas||[]).slice().sort(function(a,b){ return areaRank(a.name)-areaRank(b.name) || nat(a.name,b.name); });
+  d.equipment = (d.equipment||[]).slice().sort(function(a,b){
+    return areaRank(aMap[String(a.area_id)])-areaRank(aMap[String(b.area_id)])
+        || nat(lMap[String(a.line_id)], lMap[String(b.line_id)])
+        || nat(a.name,b.name);
+  });
+  return d;
+}
 // ============================================================
 // INIT / AUTH
 // ============================================================
