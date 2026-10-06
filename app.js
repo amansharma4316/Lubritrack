@@ -40,27 +40,41 @@ function todayLocal() {
   var d = new Date(); d.setHours(0,0,0,0); return d;
 }
 
+// ============================================================
+// AREA ORDER — dashboard / schedule are sorted in this process order.
+// Matching is by keyword (longest match wins, so "Packing Table"
+// is not mistaken for "Packing"). Unlisted areas go to the end.
+// ============================================================
 var AREA_ORDER = ['mixing','divider','proofer','swing oven','depanner','cooler','slicer',
                   'tunnel oven','cooling conveyor','packing table','packing','cbb elevator'];
+
 function areaRank(name) {
   var n = String(name||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
   var best = 999, len = 0;
-  AREA_ORDER.forEach(function(k,i){ if (n.indexOf(k)!==-1 && k.length>len) { best=i; len=k.length; } });
+  AREA_ORDER.forEach(function(k,i){
+    if (n.indexOf(k) !== -1 && k.length > len) { best = i; len = k.length; }
+  });
   return best;
 }
+
+// Sorts d.areas and d.equipment in place (returns d): area order first,
+// then line name, then equipment name (natural/numeric order).
 function applyDashOrder(d) {
-  var aMap={}, lMap={};
-  (d.areas||[]).forEach(function(a){ aMap[String(a.id)]=a.name; });
-  (d.lines||[]).forEach(function(l){ lMap[String(l.id)]=l.name; });
+  var aMap = {}, lMap = {};
+  (d.areas||[]).forEach(function(a){ aMap[String(a.id)] = a.name; });
+  (d.lines||[]).forEach(function(l){ lMap[String(l.id)] = l.name; });
   var nat = function(a,b){ return String(a||'').localeCompare(String(b||''), undefined, {numeric:true}); };
-  d.areas = (d.areas||[]).slice().sort(function(a,b){ return areaRank(a.name)-areaRank(b.name) || nat(a.name,b.name); });
+  d.areas = (d.areas||[]).slice().sort(function(a,b){
+    return areaRank(a.name) - areaRank(b.name) || nat(a.name, b.name);
+  });
   d.equipment = (d.equipment||[]).slice().sort(function(a,b){
-    return areaRank(aMap[String(a.area_id)])-areaRank(aMap[String(b.area_id)])
+    return areaRank(aMap[String(a.area_id)]) - areaRank(aMap[String(b.area_id)])
         || nat(lMap[String(a.line_id)], lMap[String(b.line_id)])
-        || nat(a.name,b.name);
+        || nat(a.name, b.name);
   });
   return d;
 }
+
 // ============================================================
 // INIT / AUTH
 // ============================================================
@@ -146,6 +160,8 @@ function buildNav() {
     h += '<button class="nl" id="nl-schedule" onclick="showPage(\'schedule\')">Schedule</button>';
   if (currentUser.role !== 'technician')
     h += '<button class="nl" id="nl-line-history" onclick="showPage(\'line-history\')">Line History</button>';
+  if (currentUser.role !== 'technician')
+    h += '<button class="nl" id="nl-area-history" onclick="window.location.href=\'area-history.html\'">Area History</button>';
   if (currentUser.role === 'admin')
     h += '<button class="nl" id="nl-admin" onclick="showPage(\'admin\')">Admin</button>';
   document.getElementById('nav-links').innerHTML = h;
@@ -315,6 +331,7 @@ async function loadDashboard() {
   try {
     var d = await getDashboardData(currentUser.area_ids||'');
     if (!d||!d.success) { showErr('dash-error', d?d.error:'No data'); return; }
+    applyDashOrder(d); // sort areas + equipment in process order
     document.getElementById('dash-cards').innerHTML =
       '<div class="sc sc-blue" onclick="showPage(\'global-parts\',{filter:\'today\'})"><div class="sc-icon">📅</div><div class="sc-num">'+(d.stats.due_today||d.stats.dueToday||0)+'</div><div class="sc-lbl">Due Today</div></div>' +
       '<div class="sc sc-amber" onclick="showPage(\'global-parts\',{filter:\'week\'})"><div class="sc-icon">🗓</div><div class="sc-num">'+(d.stats.upcoming||0)+'</div><div class="sc-lbl">Upcoming (7d)</div></div>' +
@@ -431,7 +448,10 @@ async function loadSchedule() {
   try {
     if (!S.allEquip.length || !S.allLines.length) {
       var dd = await getDashboardData(currentUser.area_ids||'');
-      if (dd && dd.success) { S.allEquip=dd.equipment||[]; S.allLines=dd.lines||[]; S.allAreas=dd.areas||[]; }
+      if (dd && dd.success) {
+        applyDashOrder(dd); // same process order as the dashboard
+        S.allEquip=dd.equipment||[]; S.allLines=dd.lines||[]; S.allAreas=dd.areas||[];
+      }
     }
     if (!S.allEquip.length) {
       document.getElementById('sch-tbl').innerHTML='<tr><td colspan="11"><div class="empty"><h3>No equipment yet</h3><p>Add lines, areas and equipment via Admin first.</p></div></td></tr>';
